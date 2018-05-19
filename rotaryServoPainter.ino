@@ -88,8 +88,8 @@ void setup()
 	
 	while(1)
 	{
-		int x = analogRead(JOYSTICK_X_PIN);
-		int y = analogRead(JOYSTICK_Y_PIN);
+		int joyX = analogRead(JOYSTICK_X_PIN) - 512;
+		int joyY = analogRead(JOYSTICK_Y_PIN) - 512;
 		//tracef("x:%d y:%d\r\n", x, y);
 
 		if (digitalRead(BTN_PIN) == 0)
@@ -104,22 +104,11 @@ void setup()
 		#define SPEED 0.8
 		//#define SPEED 1.0
 		
-		if (x > 1023 - THRESHOLD)
+		if (sqrt(joyX*joyX + joyY*joyY) > 400)
 		{
-			targetX -= SPEED;
-		}
-		else if (x < THRESHOLD)
-		{
-			targetX += SPEED;
-		}
-		
-		if (y > 1023 - THRESHOLD)
-		{
-			targetY += SPEED;
-		}
-		else if (y < THRESHOLD)
-		{
-			targetY -= SPEED;
+			float joyAngle = atan2(joyY, joyX);
+			targetX += -cos(joyAngle) * SPEED;
+			targetY += sin(joyAngle) * SPEED;
 		}
 		
 		processSerial();
