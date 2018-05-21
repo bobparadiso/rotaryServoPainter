@@ -1,6 +1,8 @@
 #include <Servo.h> 
+#include <TimerOne.h>
 #include "Trace.h"
 #include "Terminal.h"
+#include "DebouncedButton.h"
 
 //lenghts of arm parts in mm
 //#define UPPER_LEN 173
@@ -21,22 +23,52 @@
 #define MAX_ELBOW_ANGLE PI
 #define MAX_ELBOW_POS 928
 
-#define JOYSTICK_X_PIN A1
-#define JOYSTICK_Y_PIN A0
-#define BTN_PIN A2
+//#define SPEED 0.2
+#define SPEED 0.8
+//#define SPEED 1.0
+
+//#define USE_PROPORTIONAL_JOYSTICK
+#define USE_SWITCHES
+
+#ifdef USE_PROPORTIONAL_JOYSTICK
+	#define JOYSTICK_X_PIN A1
+	#define JOYSTICK_Y_PIN A0
+	#define BTN_PIN A2
+#endif
 
 //for pen
 //#define FINGER_UP_POS 1200
 //#define FINGER_DOWN_POS 1370
 
 //for brush
+//#define FINGER_UP_POS 1000
+//#define FINGER_DOWN_POS 1335
+
+//for marker
 #define FINGER_UP_POS 1000
-#define FINGER_DOWN_POS 1335
+#define FINGER_DOWN_POS 1265
 
 #define RAD_TO_DEG 57.295779513082320876798154814105
 
+#ifdef USE_SWITCHES
+DebouncedButton leftButton(8);
+DebouncedButton rightButton(9);
+DebouncedButton upButton(10);
+DebouncedButton downButton(11);
+
+//
+void updateBtnState()
+{
+	leftButton.update();
+	rightButton.update();
+	upButton.update();
+	downButton.update();
+}
+#endif
+
 Servo shoulder, elbow, finger;
 float targetX = 0, targetY = 200;
+uint8_t fingerDown = 0;
 
 //
 float lerp(float x, float in_min, float in_max, float out_min, float out_max)
@@ -74,10 +106,95 @@ void gotoPos(float x, float y)
 	elbow.writeMicroseconds(constrain(elbowPos, 850, 2100));
 }
 
+#ifdef USE_PROPORTIONAL_JOYSTICK
+//
+void updateJoystickControls()
+{
+	int joyX = analogRead(JOYSTICK_X_PIN) - 512;
+	int joyY = analogRead(JOYSTICK_Y_PIN) - 512;
+	//tracef("x:%d y:%d\r\n", x, y);
+
+	if (digitalRead(BTN_PIN) == 0)
+	{
+		fingerDown = !fingerDown;
+		finger.writeMicroseconds(fingerDown ? FINGER_DOWN_POS : FINGER_UP_POS);
+		delay(200);
+	}
+	
+	if (sqrt(joyX*joyX + joyY*joyY) > 400)
+	{
+		float joyAngle = atan2(joyY, joyX);
+		targetX += -cos(joyAngle) * SPEED;
+		targetY += sin(joyAngle) * SPEED;
+	}
+}
+#endif
+
+#ifdef USE_SWITCHES
+//
+void updateSwitchControls()
+{
+	static uint8_t prevDown = 0;
+	static uint32_t downStart = 0;
+	static uint8_t shortDown = 0;
+	
+	if (leftButton.getVal())
+	{
+		targetX -= SPEED;
+		shortDown = 0;
+	}
+	if (rightButton.getVal())
+	{
+		targetX += SPEED;
+		shortDown = 0;
+	}
+	if (upButton.getVal())
+	{
+		targetY += SPEED;
+		shortDown = 0;
+	}
+	
+	//double down toggles drawing
+	
+	if (downButton.getVal())
+	{
+		if (!prevDown)
+			downStart = millis();
+		else if (millis() - downStart >= 150)
+			targetY -= SPEED;
+	}
+	else if (prevDown)
+	{
+		if (millis() - downStart < 150)
+		{
+			shortDown++;
+			//"double-click"
+			if (shortDown == 2)
+			{
+				fingerDown = !fingerDown;
+				finger.writeMicroseconds(fingerDown ? FINGER_DOWN_POS : FINGER_UP_POS);
+				shortDown = 0;
+			}
+		}
+		else
+		{
+			shortDown = 0;
+		}
+	}
+	
+	prevDown = downButton.getVal();
+}
+#endif
+
 //
 void setup()
 {
 	Serial.begin(115200);
+	
+#ifdef USE_SWITCHES
+	Timer1.initialize(BTN_POLL_INTERVAL * 1000);
+	Timer1.attachInterrupt(updateBtnState); 
+#endif
 	
 	shoulder.attach(23);
 	elbow.attach(22);
@@ -87,34 +204,19 @@ void setup()
 	elbow.writeMicroseconds(1500);
 	finger.writeMicroseconds(FINGER_UP_POS);
 	
+#ifdef USE_PROPORTIONAL_JOYSTICK
 	pinMode(BTN_PIN, INPUT_PULLUP);
-	
-	uint8_t fingerDown = 0;
-	
+#endif
+		
 	while(1)
 	{
-		int joyX = analogRead(JOYSTICK_X_PIN) - 512;
-		int joyY = analogRead(JOYSTICK_Y_PIN) - 512;
-		//tracef("x:%d y:%d\r\n", x, y);
+#ifdef USE_PROPORTIONAL_JOYSTICK		
+		updateJoystickControls();
+#endif
 
-		if (digitalRead(BTN_PIN) == 0)
-		{
-			fingerDown = !fingerDown;
-			finger.writeMicroseconds(fingerDown ? FINGER_DOWN_POS : FINGER_UP_POS);
-			delay(200);
-		}
-		
-		#define THRESHOLD 300
-		//#define SPEED 0.2
-		#define SPEED 0.8
-		//#define SPEED 1.0
-		
-		if (sqrt(joyX*joyX + joyY*joyY) > 400)
-		{
-			float joyAngle = atan2(joyY, joyX);
-			targetX += -cos(joyAngle) * SPEED;
-			targetY += sin(joyAngle) * SPEED;
-		}
+#ifdef USE_SWITCHES
+		updateSwitchControls();
+#endif
 		
 		processSerial();
 		

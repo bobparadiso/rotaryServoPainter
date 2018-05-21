@@ -1,3 +1,4 @@
+#include <Servo.h>
 #include "Terminal.h"
 #include "Trace.h"
 
@@ -6,6 +7,7 @@
 #define CMD_BUF_SIZE 64
 
 extern float targetX, targetY;
+extern Servo finger;
 
 //
 void terminalCmdHandler(char *cmd)
@@ -23,6 +25,12 @@ void terminalCmdHandler(char *cmd)
 		tracef(F("gotoPos: x:%d y:%d\r\n"), x, y);
 		targetX = x;
 		targetY = y;
+	}
+	else if (strcmp(cmd, "finger") == 0)
+	{
+		int16_t pos = atoi(strtok(NULL, " \r\n"));
+		tracef(F("finger: pos:%d\r\n"), pos);
+		finger.writeMicroseconds(pos);
 	}
 	else if (cmd)
 	{
