@@ -21,6 +21,18 @@
 #define MAX_ELBOW_ANGLE PI
 #define MAX_ELBOW_POS 928
 
+#define JOYSTICK_X_PIN A1
+#define JOYSTICK_Y_PIN A0
+#define BTN_PIN A2
+
+//for pen
+//#define FINGER_UP_POS 1200
+//#define FINGER_DOWN_POS 1370
+
+//for brush
+#define FINGER_UP_POS 1000
+#define FINGER_DOWN_POS 1335
+
 #define RAD_TO_DEG 57.295779513082320876798154814105
 
 Servo shoulder, elbow, finger;
@@ -61,13 +73,6 @@ void gotoPos(float x, float y)
 	shoulder.writeMicroseconds(constrain(shoulderPos, 850, 2100));
 	elbow.writeMicroseconds(constrain(elbowPos, 850, 2100));
 }
-
-#define JOYSTICK_X_PIN A1
-#define JOYSTICK_Y_PIN A0
-#define BTN_PIN A2
-
-#define FINGER_UP_POS 1200
-#define FINGER_DOWN_POS 1370
 
 //
 void setup()
